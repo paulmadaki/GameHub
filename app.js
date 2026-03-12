@@ -431,5 +431,14 @@ function unlockGame() {
     if (currentVideoInterval) { clearInterval(currentVideoInterval); currentVideoInterval = null; }
     // destroy YT player if exists
     try { if (currentYTPlayer && currentYTPlayer.destroy) currentYTPlayer.destroy(); currentYTPlayer = null; } catch(e){}
-    alert("Task complete! You can now spin.");
+    // Ensure the UI is unlocked: clear spinning state and re-enable spin button
+    isSpinning = false;
+    const sb = document.getElementById('spinBtn');
+    if (sb) {
+        sb.disabled = false;
+        try { sb.focus(); } catch (e) {}
+    }
+
+    // Use a non-blocking message instead of alert to avoid pausing timers
+    try { showTempMessage('Task complete! You can now spin.', 'green', 3000); } catch (e) { /* fallback */ }
 }
