@@ -21,7 +21,7 @@ const AFFILIATE_LOGIN = "https://freedomnetwork.work/login.html";
 const params = new URLSearchParams(window.location.search);
 
 const accessKey = params.get("access");
-const time = params.get("time");
+const time = Number(params.get("time"));
 
 const now = Date.now();
 const maxAge = 5 * 60 * 1000; // 5 minutes
