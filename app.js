@@ -115,7 +115,7 @@ document.getElementById('wheelWrapper').onclick = async () => {
         count++;
         await userRef.set({ spinsCount: count }, { merge: true });
 
-        if (count % 4 === 0) {
+        if (count % 5 === 0) {
             needVideo = true;
         }
     } catch (err) {
