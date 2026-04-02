@@ -201,6 +201,16 @@ async function handleResult(selected) {
 let questionTimer = null; // Global variable to track the 12s timer
 let currentVideoInterval = null; // track active video countdown interval
 let currentYTPlayer = null;
+let currentQuestion = { id: null, correctAnswer: null, alternateAnswers: [] };
+
+function normalizeAnswer(answer) {
+    return (answer || '')
+        .toString()
+        .trim()
+        .toLowerCase()
+        .replace(/[^\p{L}\p{N}]+/gu, ' ') // keep letters/numbers only
+        .replace(/\s+/g, ' ');
+}
 
 // --- RENDER QUESTION UI WITH 12s TIMER ---
 function renderQuestion(id, data) {
@@ -210,14 +220,23 @@ function renderQuestion(id, data) {
     // Clear any existing timer just in case
     if (questionTimer) clearInterval(questionTimer);
 
+    currentQuestion.id = id;
+    currentQuestion.correctAnswer = data.correctAnswer || '';
+    currentQuestion.alternateAnswers = Array.isArray(data.alternateAnswers) ? data.alternateAnswers : [];
+
     resDiv.innerHTML = `
         <div id="qContainer" style="text-align:left; padding: 10px; border: 2px solid #333; border-radius: 8px;">
             <p style="color: red; font-weight: bold;">⏳ Time Left: <span id="qClock">40</span>s</p>
             <p><strong>Question ${id.toUpperCase()}:</strong></p>
             <p>${data.questionText}</p>
             <input type="text" id="ansInput" placeholder="Type fast...">
-            <button id="submitBtn" onclick="checkAnswer('${id}', '${data.correctAnswer}')">Submit Answer</button>
+            <button id="submitBtn">Submit Answer</button>
         </div>`;
+
+    const submitBtn = document.getElementById('submitBtn');
+    if (submitBtn) {
+        submitBtn.onclick = () => checkAnswer();
+    }
 
     // Start the countdown
     questionTimer = setInterval(() => {
@@ -242,23 +261,50 @@ function handleTimeout() {
 }
 
 // --- CHECK ANSWER (Modified to stop timer) ---
-async function checkAnswer(id, correct) {
-    const val = document.getElementById('ansInput').value.trim().toLowerCase();
-    
-    if (val === correct.toLowerCase()) {
+async function checkAnswer() {
+    const ansInputEl = document.getElementById('ansInput');
+    if (!ansInputEl || !currentQuestion.id) {
+        showTempMessage('No active question found. Spin again.', 'red', 1500);
+        return;
+    }
+
+    const userAnswer = normalizeAnswer(ansInputEl.value);
+    const correct = normalizeAnswer(currentQuestion.correctAnswer);
+
+    const alternates = (currentQuestion.alternateAnswers || []).map(a => normalizeAnswer(a)).filter(a => a !== '');
+    const isAlternateMatch = alternates.some(a => a === userAnswer);
+
+    if (correct === '') {
+        showTempMessage('Correct answer is missing in the question data. Contact admin.', 'red', 2000);
+        return;
+    }
+
+    if (userAnswer === correct || isAlternateMatch) {
         // STOP THE TIMER IMMEDIATELY ON SUCCESS
         if (questionTimer) clearInterval(questionTimer);
 
-        const qRef = db.collection("questions").doc(id);
-        await qRef.update({ isClaimed: true, winner: currentUser.uid });
-        const freshDoc = await qRef.get();
+        try {
+            const qRef = db.collection("questions").doc(currentQuestion.id);
+            await qRef.update({ isClaimed: true, winner: currentUser.uid });
+            const freshDoc = await qRef.get();
 
-        document.getElementById('result').innerHTML = `
-            <div style="color:green; border: 2px solid green; padding: 15px; border-radius: 10px; background: #eaffea;">
-                <h2>✅ CORRECT!</h2>
-                <p>Your Recharge Code is:</p>
-                <h1 style="background: #fff; padding: 10px; border: 1px solid #ccc;">${freshDoc.data().airtimeCode}</h1>
-            </div>`;
+            document.getElementById('result').innerHTML = `
+                <div style="color:green; border: 2px solid green; padding: 15px; border-radius: 10px; background: #eaffea;">
+                    <h2>✅ CORRECT!</h2>
+                    <p>Your Recharge Code is:</p>
+                    <h1 style="background: #fff; padding: 10px; border: 1px solid #ccc;">${freshDoc.data().airtimeCode}</h1>
+                </div>`;
+        } catch (err) {
+            console.error('Error claiming question:', err);
+            showTempMessage('Answer correct but failed to claim prize. Contact admin.', 'orange', 3000);
+            // Still show success UI but note the error
+            document.getElementById('result').innerHTML = `
+                <div style="color:orange; border: 2px solid orange; padding: 15px; border-radius: 10px; background: #fff3cd;">
+                    <h2>⚠️ CORRECT BUT ERROR!</h2>
+                    <p>Your answer was correct, but there was an issue claiming the prize.</p>
+                    <p>Contact admin with this error: ${err.message}</p>
+                </div>`;
+        }
     } else {
         // If wrong, do NOT block the UI with an alert (alerts pause timers).
         // Show a non-blocking inline message so the question timer continues running.

@@ -188,6 +188,8 @@ if(user){
 
 const sessionID = generateSessionID();
 
+try {
+
 await db.collection("game_sessions").doc(sessionID).set({
 
 uid:user.uid,
@@ -199,6 +201,12 @@ used:false
 });
 
 console.log("Game session created:",sessionID);
+
+} catch (err) {
+
+console.error("Error creating game session:", err);
+
+}
 
 }
 
